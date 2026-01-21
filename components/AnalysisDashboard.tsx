@@ -11,7 +11,7 @@ interface AnalysisDashboardProps {
 
 export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ result, onStartNegotiation, onReset }) => {
   const isHighPotential = result.score >= 90;
-  
+
   const chartData = [
     { name: 'Score', value: result.score },
     { name: 'Remaining', value: 100 - result.score },
@@ -25,7 +25,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ result, on
           <h2 className="text-3xl font-bold text-white">{result.companyName}</h2>
           <p className="text-slate-400 text-lg">Investment Analysis Report</p>
         </div>
-        <button 
+        <button
           onClick={onReset}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700"
         >
@@ -95,7 +95,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ result, on
               <p className="text-slate-300 text-sm leading-relaxed">{result.metrics.scalability}</p>
             </div>
           </div>
-          
+
           <div className="mt-6 pt-6 border-t border-slate-700">
             <h4 className="text-slate-400 text-sm font-medium mb-2">Executive Summary</h4>
             <p className="text-slate-300 text-sm leading-relaxed">{result.summary}</p>
@@ -118,7 +118,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ result, on
             ))}
           </ul>
         </div>
-        
+
         <div className="bg-red-900/10 border border-red-500/20 rounded-2xl p-6">
           <h3 className="flex items-center gap-2 text-red-400 font-semibold mb-4">
             <XCircle size={20} /> Risks & Weaknesses
@@ -136,32 +136,24 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ result, on
 
       {/* Action Footer */}
       <div className="flex flex-col items-center justify-center pt-4 pb-8 space-y-4">
-        {isHighPotential ? (
+        {/* Actions - Only show if viable (Score > 60 for Demo) */}
+        {result.score >= 60 ? (
           <button
             onClick={onStartNegotiation}
-            className="group relative inline-flex items-center justify-center px-8 py-4 font-bold text-white transition-all duration-200 bg-emerald-600 font-pj rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-600 hover:bg-emerald-500 active:scale-[0.98] shadow-lg shadow-emerald-500/30"
+            className="group relative inline-flex items-center gap-3 px-8 py-4 bg-slate-900 rounded-xl overflow-hidden transition-all hover:scale-105 active:scale-95 border border-emerald-500/50 hover:border-emerald-400"
           >
             <div className="absolute -inset-3 transition-all duration-1000 opacity-30 group-hover:opacity-100 bg-gradient-to-r from-emerald-600 via-cyan-600 to-emerald-600 rounded-xl blur-lg group-hover:duration-200 animate-tilt"></div>
-            <span className="relative flex items-center gap-3 text-lg">
-              Proceed to Negotiation AI
+            <span className="relative flex items-center gap-3 text-lg font-bold text-white">
+              Begin Autonomous Due Diligence
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </span>
           </button>
         ) : (
-          <div className="text-slate-500 text-sm italic border-t border-slate-800 pt-4 w-full text-center">
-            Score below 90%. Automated negotiation unavailable. 
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-200">
+            <span className="font-bold">Score below 60%.</span> Automated negotiation unavailable.
+            <button onClick={onReset} className="underline hover:text-white ml-2">Try improving pitch.</button>
           </div>
         )}
-        
-        {/* Secondary option to reset */}
-         {!isHighPotential && (
-            <button 
-              onClick={onReset}
-              className="text-slate-400 hover:text-white text-sm hover:underline"
-            >
-              Analyze another startup
-            </button>
-         )}
       </div>
     </div>
   );

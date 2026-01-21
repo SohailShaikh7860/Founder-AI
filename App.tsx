@@ -5,28 +5,34 @@ import { AnalysisDashboard } from './components/AnalysisDashboard';
 import { NegotiationChat } from './components/NegotiationChat';
 import { Portfolio } from './components/Portfolio';
 import { Investors } from './components/Investors';
-import { AppState, StartupSubmission, AnalysisResult } from './types';
-import { analyzeStartupPitch } from './services/geminiService';
+import { DueDiligenceView } from './components/DueDiligenceView';
+import { CommitteeRoom } from './components/CommitteeRoom';
+import { BoardSimulator } from './components/BoardSimulator';
+import { AppState, StartupSubmission, AnalysisResult, DueDiligenceClaim } from './types';
+import { analyzeStartupPitch, performDueDiligence } from './services/geminiService';
 
 type ViewType = 'startups' | 'investors' | 'portfolio';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  
+  const [submissionData, setSubmissionData] = useState<StartupSubmission | null>(null); // Keep track for context
+  const [ddClaims, setDdClaims] = useState<DueDiligenceClaim[]>([]);
+
   // New state for Navigation and Portfolio History
   const [currentView, setCurrentView] = useState<ViewType>('startups');
   const [history, setHistory] = useState<AnalysisResult[]>([]);
 
   const handleSubmission = async (data: StartupSubmission) => {
     setAppState(AppState.ANALYZING);
+    setSubmissionData(data); // Store for later agents
     try {
       const result = await analyzeStartupPitch(data.videoFile, data.reportText, data.reportFile);
       setAnalysisResult(result);
-      
+
       // Add to history
       setHistory(prev => [result, ...prev]);
-      
+
       setAppState(AppState.RESULTS);
     } catch (error: any) {
       console.error("Analysis failed:", error);
@@ -36,27 +42,64 @@ const App: React.FC = () => {
     }
   };
 
-  const startNegotiation = () => {
-    if (analysisResult && analysisResult.score >= 90) {
-      setAppState(AppState.NEGOTIATING);
+  // Step 1: Start Due Diligence (Triggered from Dashboard)
+  const startDueDiligence = async () => {
+    if (!analysisResult || !submissionData) return;
+
+    // We can show a loading state if needed, or just switch
+    // Ideally we fetch the claims first before showing the view, 
+    // or the view handles loading. For simplicity, let's switch and let useEffect in component (or here) fetch.
+    // But DueDiligenceView expects claims prop. Let's fetch here with a loading indicator if possible.
+    // For now, I'll do a quick inline fetch or modify the flow. 
+    // Let's modify: Set state to DUE_DILIGENCE, but show a spinner if claims are empty? 
+    // Better: Fetch first.
+
+    try {
+      const textContext = submissionData.reportText || "Full pitch report provided.";
+      const claims = await performDueDiligence(textContext, analysisResult);
+      setDdClaims(claims);
+      setAppState(AppState.DUE_DILIGENCE);
+    } catch (e) {
+      console.error("DD failed", e);
+      // Fallback if AI fails: Skip to Committee
+      setAppState(AppState.COMMITTEE);
     }
   };
 
+  // Step 2: Complete Due Diligence -> Committee
+  const handleDueDiligenceComplete = () => {
+    setAppState(AppState.COMMITTEE);
+  };
+
+  // Step 3: Committee Approved -> Negotiation
+  const handleCommitteeProceed = () => {
+    setAppState(AppState.NEGOTIATING);
+  };
+
+  // Step 3b: Committee Rejected
+  const handleCommitteeReject = () => {
+    setAppState(AppState.REJECTED);
+    // Maybe show a rejection screen? For now reset or just stay.
+    alert("The committee has decided not to proceed at this time.");
+    resetToHome();
+  };
+
+  // Step 4: Negotiation Success -> Board Sim
   const closeNegotiation = () => {
-    setAppState(AppState.RESULTS);
+    // In a real app, we'd check if deal was signed.
+    // Let's assume success leads to Simulation.
+    setAppState(AppState.BOARD_SIMULATION);
   };
 
   const resetToHome = () => {
     setAnalysisResult(null);
+    setSubmissionData(null);
     setAppState(AppState.IDLE);
     setCurrentView('startups');
   };
 
   const handleNavigate = (view: ViewType) => {
     setCurrentView(view);
-    // If navigating away from startup flow, we might want to keep the state or reset?
-    // For now, let's keep the state so they can return to their analysis if they click away.
-    // If they click 'startups', they go back to where they were in the flow.
   };
 
   return (
@@ -64,7 +107,7 @@ const App: React.FC = () => {
       <Header currentView={currentView} onNavigate={handleNavigate} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        
+
         {/* VIEW: STARTUPS (Main Flow) */}
         {currentView === 'startups' && (
           <>
@@ -76,7 +119,7 @@ const App: React.FC = () => {
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">Intelligent Capital</span>
                 </h1>
                 <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-10">
-                  Upload your startup pitch. Our Gemini-powered AI analyzes viability in seconds. 
+                  Upload your startup pitch. Our Gemini-powered AI analyzes viability in seconds.
                   Top-tier startups get immediate access to automated term sheet negotiation.
                 </p>
               </div>
@@ -85,24 +128,46 @@ const App: React.FC = () => {
             {/* Dynamic Content based on State */}
             <div className="transition-all duration-500 ease-in-out">
               {appState === AppState.IDLE || appState === AppState.ANALYZING ? (
-                <SubmissionForm 
-                  onSubmit={handleSubmission} 
-                  isProcessing={appState === AppState.ANALYZING} 
+                <SubmissionForm
+                  onSubmit={handleSubmission}
+                  isProcessing={appState === AppState.ANALYZING}
                 />
               ) : null}
 
               {appState === AppState.RESULTS && analysisResult && (
-                <AnalysisDashboard 
-                  result={analysisResult} 
-                  onStartNegotiation={startNegotiation}
-                  onReset={resetToHome} 
+                <AnalysisDashboard
+                  result={analysisResult}
+                  onStartNegotiation={startDueDiligence}
+                  onReset={resetToHome}
+                />
+              )}
+
+              {appState === AppState.DUE_DILIGENCE && (
+                <DueDiligenceView
+                  claims={ddClaims}
+                  onComplete={handleDueDiligenceComplete}
+                />
+              )}
+
+              {appState === AppState.COMMITTEE && analysisResult && (
+                <CommitteeRoom
+                  analysis={analysisResult}
+                  onProceed={handleCommitteeProceed}
+                  onReject={handleCommitteeReject}
                 />
               )}
 
               {appState === AppState.NEGOTIATING && analysisResult && (
-                <NegotiationChat 
-                  analysis={analysisResult} 
+                <NegotiationChat
+                  analysis={analysisResult}
                   onClose={closeNegotiation}
+                />
+              )}
+
+              {appState === AppState.BOARD_SIMULATION && analysisResult && (
+                <BoardSimulator
+                  analysis={analysisResult}
+                  onRestart={resetToHome}
                 />
               )}
             </div>

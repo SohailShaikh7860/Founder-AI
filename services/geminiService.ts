@@ -1,19 +1,11 @@
 import { GoogleGenAI, Type, type Schema } from "@google/genai";
-import { AnalysisResult } from "../types";
+import { AnalysisResult, DueDiligenceClaim, CommitteeMessage, BoardScenario } from "../types";
 
 /**
  * Helper to retrieve API key safely
  */
 const getApiKey = (): string => {
-  try {
-    // Defensively check for process and process.env to avoid ReferenceErrors
-    if (typeof process !== "undefined" && process?.env?.API_KEY) {
-      return process.env.API_KEY;
-    }
-  } catch (e) {
-    // Ignore any environment access errors
-  }
-  return "";
+  return import.meta.env.VITE_GEMINI_API_KEY || "";
 };
 
 /**
@@ -41,15 +33,15 @@ export const analyzeStartupPitch = async (
   reportText: string,
   reportFile: File | null
 ): Promise<AnalysisResult> => {
-  
+
   const apiKey = getApiKey();
   if (!apiKey) {
     throw new Error("Gemini API Key is missing. Please check your environment configuration.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  // Using gemini-3-flash-preview for fast, efficient multimodal analysis
-  const modelId = "gemini-3-flash-preview"; 
+  // Using gemini-3-flash-preview for fast, multimodal analysis
+  const modelId = "gemini-3-flash-preview";
 
   // Define the output schema for structured JSON
   const analysisSchema: Schema = {
@@ -58,13 +50,13 @@ export const analyzeStartupPitch = async (
       score: { type: Type.NUMBER, description: "A score from 0 to 100 based on investment potential." },
       companyName: { type: Type.STRING, description: "Inferred name of the startup." },
       summary: { type: Type.STRING, description: "Brief executive summary of the pitch." },
-      pros: { 
-        type: Type.ARRAY, 
+      pros: {
+        type: Type.ARRAY,
         items: { type: Type.STRING },
         description: "List of key strengths."
       },
-      cons: { 
-        type: Type.ARRAY, 
+      cons: {
+        type: Type.ARRAY,
         items: { type: Type.STRING },
         description: "List of potential risks or weaknesses."
       },
@@ -160,11 +152,11 @@ export const createNegotiationSession = (initialContext: string) => {
   if (!apiKey) {
     throw new Error("Gemini API Key is missing. Please check your environment configuration.");
   }
-  
+
   const ai = new GoogleGenAI({ apiKey });
-  
+
   const chat = ai.chats.create({
-    model: 'gemini-3-pro-preview', // Using 3.0 Pro for advanced reasoning in negotiation
+    model: 'gemini-3-flash-preview', // Using 3.0 Pro for advanced reasoning
     config: {
       systemInstruction: `You are "Ventura", a highly intelligent AI Investment Negotiator representing a top-tier VC firm.
       The startup you are talking to has passed the initial screening with a high score (>90%).
@@ -183,4 +175,163 @@ export const createNegotiationSession = (initialContext: string) => {
   });
 
   return chat;
+};
+
+/**
+ * FEATURE 1: Due Diligence Agent
+ * Extracts claims and generates verification questions.
+ */
+export const performDueDiligence = async (
+  pitchText: string,
+  analysis: AnalysisResult
+): Promise<DueDiligenceClaim[]> => {
+  const apiKey = getApiKey();
+  const ai = new GoogleGenAI({ apiKey });
+  const modelId = "gemini-3-flash-preview";
+
+  const prompt = `
+    You are a skeptical Due Diligence Investigator. 
+    Review the following startup pitch summary and analysis.
+    Extract 3-5 specific, verifiable claims made by the founders (e.g. "We have 50% month-over-month growth", "We are the only solution in the market").
+    
+    For each claim, flag it as "Unverified" and ask a probing question to verify it.
+    
+    Startup: ${analysis.companyName}
+    Summary: ${analysis.summary}
+    Pitch Context: ${pitchText.substring(0, 1000)}...
+
+    Return a JSON array of objects with this schema:
+    {
+      "id": "string (unique)",
+      "claim": "string (the exact claim)",
+      "category": "Market" | "Financial" | "Team" | "Product",
+      "status": "Unverified",
+      "aiQuestion": "string (your probing question)"
+    }
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: { parts: [{ text: prompt }] },
+      config: { responseMimeType: "application/json" }
+    });
+
+    if (response.text) {
+      return JSON.parse(response.text) as DueDiligenceClaim[];
+    }
+    return [];
+  } catch (e) {
+    console.error("Due Diligence Error", e);
+    return [];
+  }
+};
+
+/**
+ * FEATURE 2: Investment Committee Agents
+ * Simulates a debate between 3 personas.
+ */
+export const startCommitteeDebate = async (
+  analysis: AnalysisResult
+): Promise<CommitteeMessage[]> => {
+  const apiKey = getApiKey();
+  const ai = new GoogleGenAI({ apiKey });
+  const modelId = "gemini-3-flash-preview";
+
+  const prompt = `
+    You are simulating an Investment Committee meeting at a top VC firm.
+    There are 3 agents discussing the startup "${analysis.companyName}".
+    
+    1. "Tech" (The CTO): Obsessed with stack, scalability, and technical moat. Skeptical of "AI wrappers".
+    2. "Risk" (The CFO): Obsessed with burn rate, unit economics, and competition. Risk-averse.
+    3. "Vision" (The Partner): Obsessed with market size, story, and "changing the world". Optimistic.
+
+    Generate a short, 3-turn conversation (one comment from each) reacting to this analysis:
+    Score: ${analysis.score}
+    Pros: ${analysis.pros.join(", ")}
+    Cons: ${analysis.cons.join(", ")}
+
+    Return a JSON array of message objects:
+    {
+      "id": "string",
+      "agentId": "tech" | "risk" | "vision",
+      "text": "string (keep it punchy and in-character)"
+    }
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: { parts: [{ text: prompt }] },
+      config: { responseMimeType: "application/json" }
+    });
+    if (response.text) {
+      return JSON.parse(response.text) as CommitteeMessage[];
+    }
+    return [];
+  } catch (e) {
+    console.error("Committee Debate Error", e);
+    return [];
+  }
+};
+
+/**
+ * FEATURE 3: Board Simulator
+ * Generates a future scenario.
+ */
+export const startBoardSimulation = async (
+  analysis: AnalysisResult
+): Promise<BoardScenario> => {
+  const apiKey = getApiKey();
+  const ai = new GoogleGenAI({ apiKey });
+  const modelId = "gemini-3-flash-preview";
+
+  const prompt = `
+    You are a Future Scenario Simulator.
+    The startup "${analysis.companyName}" successfully raised funding 18 months ago.
+    Based on their initial weaknesses: ${analysis.cons.join(", ")}, generate a critical "Crisis Scenario" that they are likely facing now.
+
+    Return a JSON object:
+    {
+      "id": "scenario_1",
+      "title": "string (Dramatic title)",
+      "description": "string (What happened? e.g. 'Competitor X launched a free version...')",
+      "timeJump": "18 Months Later",
+      "choices": [
+        {
+          "id": "A",
+          "label": "string (Action A)",
+          "consequence": "string (Brief hint of result)"
+        },
+        {
+          "id": "B",
+          "label": "string (Action B)",
+          "consequence": "string (Brief hint of result)"
+        }
+      ]
+    }
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: { parts: [{ text: prompt }] },
+      config: { responseMimeType: "application/json" }
+    });
+
+    if (response.text) {
+      return JSON.parse(response.text) as BoardScenario;
+    }
+    throw new Error("No text");
+  } catch (e) {
+    console.error("Board Simulation Error", e);
+    // Return dummy if fail
+    return {
+      id: "error",
+      title: "Simulation Error",
+      description: "Could not generate scenario.",
+      timeJump: "Now",
+      choices: []
+    }
+  }
 };
