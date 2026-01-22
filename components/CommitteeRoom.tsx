@@ -87,19 +87,20 @@ export const CommitteeRoom: React.FC<CommitteeRoomProps> = ({ analysis, onProcee
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 via-purple-500 to-amber-500 opacity-20"></div>
 
                 <div className="space-y-6">
-                    {messages.map((msg, idx) => {
-                        const agent = AGENTS[msg.agentId];
+                    {messages.filter(msg => msg && msg.agentId).map((msg, idx) => {
+                        const agent = AGENTS[msg.agentId as keyof typeof AGENTS];
+                        if (!agent) return null; // Skip if agent not found
                         return (
                             <div key={idx} className={`flex gap-4 animate-slide-up ${msg.agentId === 'vision' ? 'flex-row-reverse' : ''
                                 }`}>
                                 <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-xl border border-slate-700 shrink-0">
-                                    {agent?.avatar || '🤖'}
+                                    {agent.avatar}
                                 </div>
                                 <div className={`p-4 rounded-2xl max-w-[80%] ${msg.agentId === 'tech' ? 'bg-indigo-900/30 border border-indigo-500/30 text-indigo-100 rounded-tl-none' :
                                         msg.agentId === 'risk' ? 'bg-amber-900/30 border border-amber-500/30 text-amber-100 rounded-tl-none' :
                                             'bg-purple-900/30 border border-purple-500/30 text-purple-100 rounded-tr-none'
                                     }`}>
-                                    <p className="text-xs font-bold mb-1 opacity-70">{agent?.name}</p>
+                                    <p className="text-xs font-bold mb-1 opacity-70">{agent.name}</p>
                                     <p>{msg.text}</p>
                                 </div>
                             </div>
