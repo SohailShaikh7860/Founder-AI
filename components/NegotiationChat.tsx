@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, DollarSign, X, GripHorizontal } from 'lucide-react';
+import { Send, Bot, User, DollarSign, X, GripHorizontal, AlertTriangle } from 'lucide-react';
 import { ChatMessage, AnalysisResult } from '../types';
-import { createNegotiationSession } from '../services/geminiService';
+import { createNegotiationSession, checkNegotiationProgress } from '../services/geminiService';
 import { Card } from './ui/Card';
 import type { Chat, GenerateContentResponse } from '@google/genai';
 
@@ -15,6 +15,9 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [chatSession, setChatSession] = useState<Chat | null>(null);
+  const [isCancelled, setIsCancelled] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState<string>('');
+  const [showCancellationWarning, setShowCancellationWarning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -66,9 +69,59 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Check if user wants to cancel
+  const detectUserCancellation = (text: string): boolean => {
+    const cancellationPhrases = [
+      'cancel negotiation',
+      'cancel this',
+      'end negotiation',
+      'stop negotiation',
+      'i want to cancel',
+      'nevermind',
+      'never mind',
+      'not interested anymore',
+      'pull out',
+      'walk away'
+    ];
+    const lowerText = text.toLowerCase();
+    return cancellationPhrases.some(phrase => lowerText.includes(phrase));
+  };
+
+  const handleCancellation = (reason: string, isUserInitiated: boolean = false) => {
+    setIsCancelled(true);
+    setCancellationReason(reason);
+    
+    const cancellationMsg: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'model',
+      text: reason,
+      timestamp: new Date()
+    };
+    
+    setMessages(prev => [...prev, cancellationMsg]);
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !chatSession || isLoading) return;
+    if (!input.trim() || !chatSession || isLoading || isCancelled) return;
+
+    // Check if user wants to cancel
+    if (detectUserCancellation(input)) {
+      const userMsg: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'user',
+        text: input,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMsg]);
+      setInput('');
+      
+      handleCancellation(
+        "🚫 Negotiation cancelled at your request. We understand that timing and terms need to align perfectly. Feel free to reach out when you're ready to explore funding opportunities again. Best of luck with your startup!",
+        true
+      );
+      return;
+    }
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -86,12 +139,27 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
       const aiText = result.text;
 
       if (aiText) {
-        setMessages(prev => [...prev, {
+        const aiMsg: ChatMessage = {
           id: (Date.now() + 1).toString(),
           role: 'model',
           text: aiText,
           timestamp: new Date()
-        }]);
+        };
+        
+        setMessages(prev => [...prev, aiMsg]);
+
+        // Check if AI should auto-cancel based on conversation progress
+        const updatedMessages = [...messages, userMsg, aiMsg];
+        const shouldCancel = await checkNegotiationProgress(updatedMessages, analysis);
+        
+        if (shouldCancel.shouldCancel) {
+          setTimeout(() => {
+            handleCancellation(shouldCancel.reason, false);
+          }, 2000);
+        } else if (shouldCancel.showWarning) {
+          setShowCancellationWarning(true);
+          setTimeout(() => setShowCancellationWarning(false), 5000);
+        }
       }
     } catch (error) {
       console.error("Chat error", error);
@@ -107,14 +175,23 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
         {/* Chat Header */}
         <div className="p-4 border-b border-slate-700 bg-slate-900 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-              <Bot className="w-6 h-6 text-emerald-400" />
+            <div className={`p-2 ${isCancelled ? 'bg-red-500/10 border-red-500/20' : 'bg-emerald-500/10 border-emerald-500/20'} rounded-xl border`}>
+              <Bot className={`w-6 h-6 ${isCancelled ? 'text-red-400' : 'text-emerald-400'}`} />
             </div>
             <div>
               <h3 className="font-bold text-white text-lg font-display">Founder AI Negotiator</h3>
               <p className="text-xs text-slate-400 flex items-center gap-2 uppercase tracking-wider font-semibold">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Active Session
+                {isCancelled ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                    Session Ended
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Active Session
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -125,6 +202,16 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
             <X size={20} />
           </button>
         </div>
+
+        {/* Warning Banner */}
+        {showCancellationWarning && !isCancelled && (
+          <div className="bg-amber-500/10 border-b border-amber-500/30 p-3 flex items-center gap-3 animate-slide-down">
+            <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+            <p className="text-sm text-amber-200">
+              ⚠️ Warning: The negotiation seems to be stalling. We may need to reconsider if both parties can reach an agreement.
+            </p>
+          </div>
+        )}
 
         {/* Chat Area */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-950/50 custom-scrollbar">
@@ -171,28 +258,40 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
 
         {/* Input Area */}
         <div className="p-4 bg-slate-900 border-t border-slate-700">
-          <form onSubmit={handleSend} className="relative flex items-center gap-3">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Type your reply to negotiate terms..."
-                className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-5 py-4 pr-12 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 placeholder-slate-500 transition-all font-medium"
-                disabled={isLoading}
-              />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-600 font-medium hidden sm:block">
-                RETURN to send
-              </div>
+          {isCancelled ? (
+            <div className="text-center py-4">
+              <p className="text-slate-400 text-sm mb-3">Negotiation has been terminated.</p>
+              <button
+                onClick={onClose}
+                className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-all"
+              >
+                Close Window
+              </button>
             </div>
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading}
-              className="p-4 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 transition-all shadow-lg hover:shadow-emerald-500/20 active:scale-95"
-            >
-              <Send size={20} />
-            </button>
-          </form>
+          ) : (
+            <form onSubmit={handleSend} className="relative flex items-center gap-3">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Type your reply to negotiate terms... (or type 'cancel negotiation' to end)"
+                  className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-5 py-4 pr-12 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 placeholder-slate-500 transition-all font-medium"
+                  disabled={isLoading}
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-600 font-medium hidden sm:block">
+                  RETURN to send
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={!input.trim() || isLoading}
+                className="p-4 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 transition-all shadow-lg hover:shadow-emerald-500/20 active:scale-95"
+              >
+                <Send size={20} />
+              </button>
+            </form>
+          )}
         </div>
       </Card>
     </div>

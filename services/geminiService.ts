@@ -159,7 +159,7 @@ export const createNegotiationSession = (initialContext: string) => {
     model: 'gemini-3-flash-preview', // Using 3.0 Pro for advanced reasoning
     config: {
       systemInstruction: `You are "Ventura", a highly intelligent AI Investment Negotiator representing a top-tier VC firm.
-      The startup you are talking to has passed the initial screening with a high score (>90%).
+      The startup you are talking to has passed the initial screening with a high score (>60%).
       
       Your Goal: Negotiate a term sheet.
       
@@ -170,6 +170,15 @@ export const createNegotiationSession = (initialContext: string) => {
       4. Long-term Vision & Exit Strategy
       
       Tone: Professional, direct, shrewd, yet supportive of high-growth potential. Do not accept weak answers. Drill down into numbers.
+      
+      IMPORTANT NEGOTIATION RULES:
+      - If the founder dodges key questions 2+ times, call it out firmly
+      - If valuations/expectations are wildly unrealistic, push back with market data
+      - If the founder can't provide basic metrics (revenue, growth rate, CAC), express serious concern
+      - If you sense the conversation is going in circles, acknowledge it and request specific information
+      - Be willing to express skepticism when warranted - you represent a real VC firm
+      - Your time is valuable; don't let founders waste it with vague or evasive answers
+      
       Start by congratulating them on the high score and asking for their funding ask.`
     }
   });
@@ -333,5 +342,84 @@ export const startBoardSimulation = async (
       timeJump: "Now",
       choices: []
     }
+  }
+};
+
+/**
+ * FEATURE 4: Agentic Negotiation Progress Checker
+ * Analyzes negotiation messages to detect if deal is stalling or should be cancelled.
+ */
+export const checkNegotiationProgress = async (
+  messages: any[],
+  analysis: AnalysisResult
+): Promise<{ shouldCancel: boolean; showWarning: boolean; reason: string }> => {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    return { shouldCancel: false, showWarning: false, reason: "" };
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const modelId = "gemini-3-flash-preview";
+
+  // Only check if we have at least 6 messages (3 exchanges)
+  if (messages.length < 6) {
+    return { shouldCancel: false, showWarning: false, reason: "" };
+  }
+
+  // Get last 8 messages for context
+  const recentMessages = messages.slice(-8);
+  const conversationText = recentMessages
+    .map(msg => `${msg.role === 'user' ? 'Founder' : 'VC'}: ${msg.text}`)
+    .join('\n\n');
+
+  const prompt = `
+    You are a Negotiation Progress Analyzer for a VC firm.
+    Analyze this negotiation conversation and determine if it should be cancelled.
+    
+    Startup: ${analysis.companyName} (Score: ${analysis.score}/100)
+    
+    Recent Conversation:
+    ${conversationText}
+    
+    Analyze for these RED FLAGS:
+    1. Founder is repeatedly dodging key questions (valuations, revenue, metrics)
+    2. Founder is being unrealistic or defensive about terms
+    3. Conversation is going in circles (same topics repeated 3+ times)
+    4. Founder shows lack of understanding of basic business metrics
+    5. Founder is giving vague, non-committal answers
+    6. Terms are so far apart that compromise seems unlikely
+    7. Founder's expectations are completely misaligned with reality
+    
+    Return JSON:
+    {
+      "shouldCancel": boolean (true if 3+ red flags or conversation is clearly unproductive),
+      "showWarning": boolean (true if 2 red flags detected - warn but don't cancel yet),
+      "reason": "string (if shouldCancel is true, provide a professional message explaining why the VC is ending negotiations. Be diplomatic but firm.)"
+    }
+    
+    Example cancellation reason: "After careful consideration of our discussion, it appears our expectations around valuation and growth metrics are significantly misaligned. We believe it's best to pause negotiations at this time. We wish you success and encourage you to reconnect once you've achieved the milestones we discussed."
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: { parts: [{ text: prompt }] },
+      config: { responseMimeType: "application/json" }
+    });
+
+    if (response.text) {
+      const result = JSON.parse(response.text);
+      
+      // If AI decides to cancel, format the reason nicely
+      if (result.shouldCancel && result.reason) {
+        result.reason = `🚫 ${result.reason}`;
+      }
+      
+      return result;
+    }
+    return { shouldCancel: false, showWarning: false, reason: "" };
+  } catch (e) {
+    console.error("Negotiation Progress Check Error", e);
+    return { shouldCancel: false, showWarning: false, reason: "" };
   }
 };
