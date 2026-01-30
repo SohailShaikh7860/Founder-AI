@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Bot, User, DollarSign, X, GripHorizontal, AlertTriangle } from 'lucide-react';
 import { ChatMessage, AnalysisResult } from '../types';
-import { createNegotiationSession, checkNegotiationProgress } from '../services/geminiService';
+import { createNegotiationSession, checkNegotiationProgress, generateTermSheet } from '../services/geminiService';
 import { Card } from './ui/Card';
+import { DealSuccessModal } from './DealSuccessModal';
 import type { Chat, GenerateContentResponse } from '@google/genai';
 
 interface NegotiationChatProps {
   analysis: AnalysisResult;
   onClose: () => void;
+  onProceedToBoardSim?: () => void;
 }
 
-export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onClose }) => {
+export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onClose, onProceedToBoardSim }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -18,6 +20,9 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
   const [isCancelled, setIsCancelled] = useState(false);
   const [cancellationReason, setCancellationReason] = useState<string>('');
   const [showCancellationWarning, setShowCancellationWarning] = useState(false);
+  const [termSheet, setTermSheet] = useState<any>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [isGeneratingTermSheet, setIsGeneratingTermSheet] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -101,6 +106,42 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
     setMessages(prev => [...prev, cancellationMsg]);
   };
 
+  // Detect if deal was completed in the conversation
+  const detectDealCompletion = (text: string): boolean => {
+    const dealPhrases = [
+      'deal',
+      'agreed',
+      'accept',
+      'sounds good',
+      'let\'s do it',
+      'i agree',
+      'you have a deal',
+      'perfect',
+      'we have an agreement',
+      'congratulations'
+    ];
+    const lowerText = text.toLowerCase();
+    // Need at least 2 deal indicators to confirm
+    const matches = dealPhrases.filter(phrase => lowerText.includes(phrase)).length;
+    return matches >= 2 || lowerText.includes('we have a deal');
+  };
+
+  // Generate term sheet after deal completion
+  const handleDealCompletion = async (updatedMessages: ChatMessage[]) => {
+    setIsGeneratingTermSheet(true);
+    try {
+      const sheet = await generateTermSheet(updatedMessages, analysis);
+      if (sheet.dealCompleted) {
+        setTermSheet(sheet);
+        setShowSuccessModal(true);
+      }
+    } catch (error) {
+      console.error("Failed to generate term sheet", error);
+    } finally {
+      setIsGeneratingTermSheet(false);
+    }
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !chatSession || isLoading || isCancelled) return;
@@ -148,17 +189,27 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
         
         setMessages(prev => [...prev, aiMsg]);
 
-        // Check if AI should auto-cancel based on conversation progress
+        // Check if deal was completed
         const updatedMessages = [...messages, userMsg, aiMsg];
-        const shouldCancel = await checkNegotiationProgress(updatedMessages, analysis);
+        const dealCompleted = detectDealCompletion(aiText) || detectDealCompletion(userMsg.text);
         
-        if (shouldCancel.shouldCancel) {
+        if (dealCompleted) {
+          // Generate term sheet after a brief delay
           setTimeout(() => {
-            handleCancellation(shouldCancel.reason, false);
-          }, 2000);
-        } else if (shouldCancel.showWarning) {
-          setShowCancellationWarning(true);
-          setTimeout(() => setShowCancellationWarning(false), 5000);
+            handleDealCompletion(updatedMessages);
+          }, 1500);
+        } else {
+          // Check if AI should auto-cancel based on conversation progress
+          const shouldCancel = await checkNegotiationProgress(updatedMessages, analysis);
+          
+          if (shouldCancel.shouldCancel) {
+            setTimeout(() => {
+              handleCancellation(shouldCancel.reason, false);
+            }, 2000);
+          } else if (shouldCancel.showWarning) {
+            setShowCancellationWarning(true);
+            setTimeout(() => setShowCancellationWarning(false), 5000);
+          }
         }
       }
     } catch (error) {
@@ -293,7 +344,44 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
             </form>
           )}
         </div>
+
+        {/* Generating Term Sheet Indicator */}
+        {isGeneratingTermSheet && (
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-10">
+            <div className="bg-slate-800 p-6 rounded-xl border border-emerald-500/30 flex items-center gap-4">
+              <div className="flex gap-2">
+                <span className="w-3 h-3 bg-emerald-500 rounded-full animate-bounce"></span>
+                <span className="w-3 h-3 bg-emerald-500 rounded-full animate-bounce delay-75"></span>
+                <span className="w-3 h-3 bg-emerald-500 rounded-full animate-bounce delay-150"></span>
+              </div>
+              <p className="text-white font-semibold">Generating Term Sheet...</p>
+            </div>
+          </div>
+        )}
       </Card>
+
+      {/* Deal Success Modal */}
+      {showSuccessModal && termSheet && (
+        <DealSuccessModal
+          termSheet={termSheet}
+          companyName={analysis.companyName}
+          onViewFullTermSheet={() => {
+            // TODO: Implement full term sheet view in next step
+            console.log("View full term sheet", termSheet);
+          }}
+          onProceedToBoardSim={() => {
+            setShowSuccessModal(false);
+            if (onProceedToBoardSim) {
+              onProceedToBoardSim();
+            }
+            onClose();
+          }}
+          onClose={() => {
+            setShowSuccessModal(false);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 };

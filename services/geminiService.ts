@@ -346,7 +346,86 @@ export const startBoardSimulation = async (
 };
 
 /**
- * FEATURE 4: Agentic Negotiation Progress Checker
+ * FEATURE 4: Term Sheet Generator
+ * Extracts agreed terms from negotiation conversation.
+ */
+export const generateTermSheet = async (
+  messages: any[],
+  analysis: AnalysisResult
+): Promise<any> => {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error("API key required for term sheet generation");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const modelId = "gemini-3-flash-preview";
+
+  const conversationText = messages
+    .map(msg => `${msg.role === 'user' ? 'Founder' : 'VC'}: ${msg.text}`)
+    .join('\n\n');
+
+  const prompt = `
+    You are a Legal Term Sheet Generator for a VC firm.
+    Analyze this negotiation conversation and extract ALL agreed terms into a formal term sheet.
+    
+    Startup: ${analysis.companyName}
+    Initial Score: ${analysis.score}/100
+    
+    Full Conversation:
+    ${conversationText}
+    
+    Extract and structure the following (use "To be determined" if not discussed):
+    
+    Return JSON:
+    {
+      "dealCompleted": boolean (true only if BOTH parties explicitly agreed to terms),
+      "investmentAmount": "string (e.g., '$2M')",
+      "valuation": "string (e.g., 'Pre-money: $8M' or 'Post-money: $10M')",
+      "equityPercentage": "string (e.g., '20%')",
+      "useOfFunds": {
+        "product": "string (percentage or amount)",
+        "marketing": "string",
+        "hiring": "string",
+        "operations": "string",
+        "other": "string"
+      },
+      "terms": {
+        "boardSeats": "string (e.g., '1 seat for VC, 2 for founders')",
+        "liquidationPreference": "string (e.g., '1x non-participating')",
+        "antiDilution": "string (e.g., 'Broad-based weighted average')",
+        "votingRights": "string",
+        "proRataRights": "string (yes/no)"
+      },
+      "milestones": {
+        "revenue": "string (target)",
+        "profitability": "string (timeline)",
+        "customerGrowth": "string (target)"
+      },
+      "nextSteps": ["string array of action items"],
+      "notes": "string (any special conditions or important details)"
+    }
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: { parts: [{ text: prompt }] },
+      config: { responseMimeType: "application/json" }
+    });
+
+    if (response.text) {
+      return JSON.parse(response.text);
+    }
+    throw new Error("No response generated");
+  } catch (e) {
+    console.error("Term Sheet Generation Error", e);
+    throw e;
+  }
+};
+
+/**
+ * FEATURE 5: Agentic Negotiation Progress Checker
  * Analyzes negotiation messages to detect if deal is stalling or should be cancelled.
  */
 export const checkNegotiationProgress = async (
