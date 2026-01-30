@@ -4,6 +4,7 @@ import { ChatMessage, AnalysisResult } from '../types';
 import { createNegotiationSession, checkNegotiationProgress, generateTermSheet } from '../services/geminiService';
 import { Card } from './ui/Card';
 import { DealSuccessModal } from './DealSuccessModal';
+import { FullTermSheet } from './FullTermSheet';
 import type { Chat, GenerateContentResponse } from '@google/genai';
 
 interface NegotiationChatProps {
@@ -22,6 +23,7 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
   const [showCancellationWarning, setShowCancellationWarning] = useState(false);
   const [termSheet, setTermSheet] = useState<any>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showFullTermSheet, setShowFullTermSheet] = useState(false);
   const [isGeneratingTermSheet, setIsGeneratingTermSheet] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -361,13 +363,13 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
       </Card>
 
       {/* Deal Success Modal */}
-      {showSuccessModal && termSheet && (
+      {showSuccessModal && termSheet && !showFullTermSheet && (
         <DealSuccessModal
           termSheet={termSheet}
           companyName={analysis.companyName}
           onViewFullTermSheet={() => {
-            // TODO: Implement full term sheet view in next step
-            console.log("View full term sheet", termSheet);
+            setShowSuccessModal(false);
+            setShowFullTermSheet(true);
           }}
           onProceedToBoardSim={() => {
             setShowSuccessModal(false);
@@ -379,6 +381,18 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
           onClose={() => {
             setShowSuccessModal(false);
             onClose();
+          }}
+        />
+      )}
+
+      {/* Full Term Sheet Viewer */}
+      {showFullTermSheet && termSheet && (
+        <FullTermSheet
+          termSheet={termSheet}
+          companyName={analysis.companyName}
+          onClose={() => {
+            setShowFullTermSheet(false);
+            setShowSuccessModal(true); // Go back to success modal
           }}
         />
       )}
