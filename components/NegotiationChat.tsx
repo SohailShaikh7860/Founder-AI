@@ -81,14 +81,22 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
     const cancellationPhrases = [
       'cancel negotiation',
       'cancel this',
+      'cancel the deal',
       'end negotiation',
+      'end the deal',
+      'end this deal',
+      'end deal',
       'stop negotiation',
+      'stop this',
+      'stop the deal',
       'i want to cancel',
       'nevermind',
       'never mind',
       'not interested anymore',
       'pull out',
-      'walk away'
+      'walk away',
+      'back out',
+      'withdraw'
     ];
     const lowerText = text.toLowerCase();
     return cancellationPhrases.some(phrase => lowerText.includes(phrase));
@@ -159,7 +167,7 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
       setInput('');
       
       handleCancellation(
-        "🚫 Negotiation cancelled at your request. We understand that timing and terms need to align perfectly. Feel free to reach out when you're ready to explore funding opportunities again. Best of luck with your startup!",
+        "Negotiation cancelled at your request. We understand that timing and terms need to align perfectly. Feel free to reach out when you're ready to explore funding opportunities again. Best of luck with your startup!",
         true
       );
       return;
@@ -248,7 +256,7 @@ export const NegotiationChat: React.FC<NegotiationChatProps> = ({ analysis, onCl
           <div className="bg-amber-500/10 border-b border-amber-500/30 p-3 flex items-center gap-3 animate-slide-down">
             <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
             <p className="text-sm text-amber-200">
-              ⚠️ Warning: The negotiation seems to be stalling. We may need to reconsider if both parties can reach an agreement.
+              Warning: The negotiation seems to be stalling. We may need to reconsider if both parties can reach an agreement.
             </p>
           </div>
         )}

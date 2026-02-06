@@ -17,6 +17,7 @@ const App: React.FC = () => {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [submissionData, setSubmissionData] = useState<StartupSubmission | null>(null);
   const [ddClaims, setDdClaims] = useState<DueDiligenceClaim[]>([]);
+  const [isDDLoading, setIsDDLoading] = useState(false);
 
   // Navigation and History State
   const [currentView, setCurrentView] = useState<ViewType>('startups');
@@ -40,15 +41,17 @@ const App: React.FC = () => {
 
   const startDueDiligence = async () => {
     if (!analysisResult || !submissionData) return;
+    setIsDDLoading(true);
     try {
       const textContext = submissionData.reportText || "Full pitch report provided.";
-      // Optimistic update or loading state could be better here
       const claims = await performDueDiligence(textContext, analysisResult);
       setDdClaims(claims);
       setAppState(AppState.DUE_DILIGENCE);
     } catch (e) {
       console.error("DD failed", e);
       setAppState(AppState.COMMITTEE);
+    } finally {
+      setIsDDLoading(false);
     }
   };
 
@@ -135,6 +138,7 @@ const App: React.FC = () => {
             result={analysisResult}
             onStartNegotiation={startDueDiligence}
             onReset={resetToHome}
+            isLoading={isDDLoading}
           />
         )}
 

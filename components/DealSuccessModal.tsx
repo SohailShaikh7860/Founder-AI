@@ -1,34 +1,7 @@
 import React from 'react';
 import { CheckCircle, TrendingUp, DollarSign, ArrowRight, FileText, X } from 'lucide-react';
 import { Card } from './ui/Card';
-
-interface TermSheet {
-  dealCompleted: boolean;
-  investmentAmount: string;
-  valuation: string;
-  equityPercentage: string;
-  useOfFunds: {
-    product: string;
-    marketing: string;
-    hiring: string;
-    operations: string;
-    other: string;
-  };
-  terms: {
-    boardSeats: string;
-    liquidationPreference: string;
-    antiDilution: string;
-    votingRights: string;
-    proRataRights: string;
-  };
-  milestones: {
-    revenue: string;
-    profitability: string;
-    customerGrowth: string;
-  };
-  nextSteps: string[];
-  notes: string;
-}
+import { TermSheet } from '../types';
 
 interface DealSuccessModalProps {
   termSheet: TermSheet;
@@ -65,7 +38,7 @@ export const DealSuccessModal: React.FC<DealSuccessModalProps> = ({
               <CheckCircle className="w-12 h-12 text-emerald-400" />
             </div>
             <h2 className="text-4xl font-bold text-white mb-2 font-display">
-              🎉 Deal Closed!
+              Deal Closed!
             </h2>
             <p className="text-emerald-300 text-lg">
               Congratulations! You've successfully negotiated with <span className="font-bold">{companyName}</span>
@@ -120,7 +93,7 @@ export const DealSuccessModal: React.FC<DealSuccessModalProps> = ({
 
           
           <div className="mb-8">
-            <h4 className="text-lg font-semibold text-white mb-4">💰 Use of Funds</h4>
+            <h4 className="text-lg font-semibold text-white mb-4">Use of Funds</h4>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {Object.entries(termSheet.useOfFunds).map(([key, value]) => (
                 value && value !== "To be determined" && (
@@ -135,7 +108,7 @@ export const DealSuccessModal: React.FC<DealSuccessModalProps> = ({
 
           
           <div className="mb-8">
-            <h4 className="text-lg font-semibold text-white mb-4">📋 Key Terms</h4>
+            <h4 className="text-lg font-semibold text-white mb-4">Key Terms</h4>
             <div className="space-y-2">
               {termSheet.terms.boardSeats && termSheet.terms.boardSeats !== "To be determined" && (
                 <div className="bg-slate-800/30 p-3 rounded-lg border border-slate-700/50">
@@ -155,7 +128,7 @@ export const DealSuccessModal: React.FC<DealSuccessModalProps> = ({
          
           {termSheet.nextSteps && termSheet.nextSteps.length > 0 && (
             <div className="mb-8">
-              <h4 className="text-lg font-semibold text-white mb-4">✅ Next Steps</h4>
+              <h4 className="text-lg font-semibold text-white mb-4">Next Steps</h4>
               <ul className="space-y-2">
                 {termSheet.nextSteps.map((step, idx) => (
                   <li key={idx} className="flex items-start gap-2 text-slate-300 text-sm">

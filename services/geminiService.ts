@@ -491,7 +491,7 @@ export const checkNegotiationProgress = async (
       
       // If AI decides to cancel, format the reason nicely
       if (result.shouldCancel && result.reason) {
-        result.reason = `🚫 ${result.reason}`;
+        result.reason = result.reason;
       }
       
       return result;

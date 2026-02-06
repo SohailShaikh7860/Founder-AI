@@ -1,16 +1,17 @@
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { AnalysisResult } from '../types';
-import { CheckCircle, XCircle, TrendingUp, Zap, Users, ArrowRight, RotateCcw } from 'lucide-react';
+import { CheckCircle, XCircle, TrendingUp, Zap, Users, ArrowRight, RotateCcw, Loader2 } from 'lucide-react';
 import { Card } from './ui/Card';
 
 interface AnalysisDashboardProps {
   result: AnalysisResult;
   onStartNegotiation: () => void;
   onReset: () => void;
+  isLoading?: boolean;
 }
 
-export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ result, onStartNegotiation, onReset }) => {
+export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ result, onStartNegotiation, onReset, isLoading = false }) => {
   const isHighPotential = result.score >= 75; // Adjusted threshold for realism
 
   const chartData = [
@@ -182,10 +183,20 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ result, on
             </div>
             <button
               onClick={onStartNegotiation}
-              className="group relative flex items-center gap-3 px-8 py-4 bg-slate-100 hover:bg-white text-slate-900 rounded-xl font-bold text-lg transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] mx-auto"
+              disabled={isLoading}
+              className="group relative flex items-center gap-3 px-8 py-4 bg-slate-100 hover:bg-white text-slate-900 rounded-xl font-bold text-lg transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] mx-auto disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-100"
             >
-              Start Autonomous Negotiation
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Initiating Due Diligence...
+                </>
+              ) : (
+                <>
+                  Start Autonomous Negotiation
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </>
+              )}
             </button>
             <p className="text-slate-500 text-sm">
               Proceeding will verify claims (`Due Diligence`) and initiate term sheet generation (`Committee`).

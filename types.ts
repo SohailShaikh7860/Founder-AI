@@ -74,3 +74,31 @@ export interface BoardScenario {
     consequence: string;
   }[];
 }
+
+export interface TermSheet {
+  dealCompleted: boolean;
+  investmentAmount: string;
+  valuation: string;
+  equityPercentage: string;
+  useOfFunds: {
+    product: string;
+    marketing: string;
+    hiring: string;
+    operations: string;
+    other: string;
+  };
+  terms: {
+    boardSeats: string;
+    liquidationPreference: string;
+    antiDilution: string;
+    votingRights: string;
+    proRataRights: string;
+  };
+  milestones: {
+    revenue: string;
+    profitability: string;
+    customerGrowth: string;
+  };
+  nextSteps: string[];
+  notes: string;
+}

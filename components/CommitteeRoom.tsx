@@ -29,7 +29,7 @@ const AGENTS: Record<string, CommitteeAgent> = {
         id: 'vision',
         name: 'Victoria (Partner)',
         role: 'Visionary',
-        avatar: '🚀',
+        avatar: 'VP',
         personality: 'Optimistic, focused on market size and narrative.'
     }
 };
